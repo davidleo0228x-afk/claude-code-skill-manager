@@ -534,11 +534,11 @@ function filterSkills() {
 
 function renderStats() {
   const bar = document.getElementById('statsBar');
-  const totalChip = `<button class="stat-chip${!activeCategory && !activePlatform ? ' active' : ''}" onclick="setCategory(null); setPlatform(null)">全部 (${allSkills.length})</button>`;
+  const totalChip = `<button class="stat-chip${!activeCategory && !activePlatform ? ' active' : ''}" onclick="setCategory(null)">全部 (${allSkills.length})</button>`;
   const ccChip = `<button class="stat-chip${activePlatform === 'claude-code' ? ' active' : ''}" onclick="setPlatform('claude-code')">🧩 Claude · ${platformStats['claude-code'] || 0}</button>`;
   const codexChip = `<button class="stat-chip${activePlatform === 'codex' ? ' active' : ''}" onclick="setPlatform('codex')">🤖 Codex · ${platformStats['codex'] || 0}</button>`;
   const catChips = Object.entries(stats).map(([cat, count]) =>
-    `<button class="stat-chip${activeCategory === cat ? ' active' : ''}" onclick="setCategory('${cat.replace(/'/g, "\\'")}'); setPlatform(null)">${cat} · ${count}</button>`
+    `<button class="stat-chip${activeCategory === cat ? ' active' : ''}" onclick="setCategory('${cat.replace(/'/g, "\\'")}')">${cat} · ${count}</button>`
   ).join('');
   bar.innerHTML = totalChip + ccChip + codexChip + catChips;
 }
@@ -550,7 +550,12 @@ function setPlatform(platform) {
   renderCards();
 }
 
-function renderCards() {
+function setCategory(cat) {
+  activeCategory = cat;
+  activePlatform = null;
+  renderStats();
+  renderCards();
+}
   const filtered = filterSkills();
   const grid = document.getElementById('grid');
   const empty = document.getElementById('empty');
@@ -699,13 +704,6 @@ function showToast(msg, type) {
     toast.style.animation = 'slideOut 250ms ease-out forwards';
     setTimeout(() => toast.remove(), 250);
   }, 3000);
-}
-
-// ─── Category Filter ────────────────────────────────────────
-function setCategory(cat) {
-  activeCategory = cat;
-  renderStats();
-  renderCards();
 }
 
 // ─── Search ─────────────────────────────────────────────────
