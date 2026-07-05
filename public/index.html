@@ -556,6 +556,8 @@ function setCategory(cat) {
   renderStats();
   renderCards();
 }
+
+function renderCards() {
   const filtered = filterSkills();
   const grid = document.getElementById('grid');
   const empty = document.getElementById('empty');
