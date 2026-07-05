@@ -232,6 +232,14 @@ rm SkillManager_arm64 SkillManager_x86_64
 
 ---
 
+## 📋 Changelog / 更新日志
+
+See [CHANGELOG.md](./CHANGELOG.md) for the full update history of all versions.
+/
+查看 [CHANGELOG.md](./CHANGELOG.md) 了解所有版本的完整更新记录。
+
+---
+
 ## 🤝 Contributing / 参与贡献
 
 Contributions are welcome! Feel free to open issues or submit PRs.
