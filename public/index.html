@@ -43,6 +43,19 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ─── Scrollbar (dark theme) ─────────────────────────── */
+html {
+  scrollbar-color: var(--border) var(--bg);
+  scrollbar-width: thin;
+}
+html::-webkit-scrollbar { width: 8px; }
+html::-webkit-scrollbar-track { background: var(--bg); }
+html::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+html::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
 /* ─── Sync Progress Bar ─────────────────────────────── */
 .sync-bar {
   position: fixed; top: 3px; left: 0; right: 0; height: 3px; z-index: 999;
