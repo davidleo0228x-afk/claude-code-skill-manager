@@ -5,6 +5,8 @@ const os = require('os');
 
 const AGENTS_DIR = path.join(os.homedir(), '.agents', 'skills');
 const CLAUDE_DIR = path.join(os.homedir(), '.claude', 'skills');
+const CODEX_SKILLS_DIR = path.join(os.homedir(), '.codex', 'skills');
+const CODEX_SYSTEM_DIR = path.join(CODEX_SKILLS_DIR, '.system');
 const PORT = 3099;
 
 // ─── Category & Metadata Mappings ───────────────────────────────────────────
@@ -129,6 +131,52 @@ const ZH_DESCRIPTIONS = {
   'writing-guidelines':           '文档和文案风格审查。确保文案语调一致、专业，符合写作规范。',
 };
 
+// ─── Codex (OpenCode) Skill Metadata ─────────────────────────────────────────
+
+const CODEX_CATEGORIES = {
+  'humanizer':              { cat: '📝 AI 写作 / 润色', emoji: '📝' },
+  'humanizer-zh':           { cat: '📝 AI 写作 / 润色', emoji: '📝' },
+  'humanizer-zh-academic':  { cat: '📝 AI 写作 / 润色', emoji: '📝' },
+  'skill-creator':          { cat: '⚙️ Codex 系统', emoji: '⚙️' },
+  'plugin-creator':         { cat: '⚙️ Codex 系统', emoji: '⚙️' },
+  'skill-installer':        { cat: '⚙️ Codex 系统', emoji: '⚙️' },
+  'openai-docs':            { cat: '⚙️ Codex 系统', emoji: '⚙️' },
+  'imagegen':               { cat: '⚙️ Codex 系统', emoji: '⚙️' },
+};
+
+const CODEX_SUITABLE_PROJECTS = {
+  'humanizer':              ['文本编辑', 'AI 内容检测', '写作辅助', '内容审查'],
+  'humanizer-zh':           ['中文写作', '文本润色', '内容编辑', 'AI 降重'],
+  'humanizer-zh-academic':  ['学术论文', '期刊文章', '毕业论文', '学术写作', 'AIGC 降重'],
+  'skill-creator':          ['Skill 开发', '能力扩展', '插件开发'],
+  'plugin-creator':         ['插件开发', 'Codex 扩展', '工具链'],
+  'skill-installer':        ['Skill 管理', '能力扩展', '工具安装'],
+  'openai-docs':            ['API 开发', 'OpenAI 集成', '模型选型', '参考文档'],
+  'imagegen':               ['图片生成', '图像编辑', '视觉素材', '像素图'],
+};
+
+const CODEX_TRIGGER_KEYWORDS = {
+  'humanizer':              ['humanize', '去AI化', '降低AI痕迹', '改写', '润色', 'natural writing', 'AI detection'],
+  'humanizer-zh':           ['润色', '去AI味', '降低AI感', '中文改写', '自然书写', 'AI痕迹'],
+  'humanizer-zh-academic':  ['降低AIGC', '学术润色', 'AIGC检测', '论文降重', '学术写作', '降低AI率'],
+  'skill-creator':          ['create skill', '创建 skill', '新建技能', '编写 skill', 'skill 开发'],
+  'plugin-creator':         ['create plugin', '创建插件', '新建插件', 'plugin 开发', '插件开发'],
+  'skill-installer':        ['install skill', '安装 skill', '安装技能', 'install curated', 'skill 安装'],
+  'openai-docs':            ['OpenAI API', 'model API', 'Codex API', 'OpenAI 文档', 'API 参考'],
+  'imagegen':               ['generate image', '生成图片', 'create image', 'make image', '图片生成', 'draw'],
+};
+
+const CODEX_ZH_DESCRIPTIONS = {
+  'humanizer':              '去除文本中的 AI 生成痕迹。检测并修复夸大的象征意义、宣传性语言、肤浅的 -ing 分析、模糊归因、破折号过度使用、AI 高频词汇等模式。基于 Wikipedia "Signs of AI writing" 指南。兼容 Claude Code + OpenCode。',
+  'humanizer-zh':           '中文文本 AI 去痕迹工具。去除中文文本中的 AI 生成痕迹，使其听起来更自然、更像人类书写。检测并修复中文 AI 写作的典型模式。',
+  'humanizer-zh-academic':  '降低中文学术写作 AIGC 检测率。基于真实论文改写实验（AIGC 率从 >50% 降至 11%）归纳的规律，检测并修复中文 AI 写作的典型模式：理论依据式起笔、套路结尾、整齐并列句、模板化问题陈述等。',
+  'skill-creator':          'Codex 官方 Skill 创建指南。当需要创建或更新 Skill 以扩展 Codex 能力时使用，包含专业知识、工作流程和工具集成的最佳实践。',
+  'plugin-creator':         'Codex 插件创建与脚手架工具。创建包含 .codex-plugin/plugin.json 的插件目录，管理 marketplace 条目。',
+  'skill-installer':        'Codex Skill 安装工具。从精选列表或 GitHub 仓库安装 Skills 到 $CODEX_HOME/skills。',
+  'openai-docs':            'OpenAI 官方文档参考。当需要查询 OpenAI 产品/API 使用方法、模型选型建议、升级指南时使用。',
+  'imagegen':               'Codex 图片生成与编辑。适用于创建新图片、转换已有图片、生成视觉素材——照片、插图、纹理、精灵图、mockup、透明背景抠图等位图资产。',
+};
+
 // ─── Skill Parsing ──────────────────────────────────────────────────────────
 
 function parseFrontmatter(content) {
@@ -137,16 +185,45 @@ function parseFrontmatter(content) {
   const end = lines.indexOf('---', 1);
   if (end === -1) return {};
   const fm = {};
+  let multiKey = null;
+  let multiVal = [];
+
   for (let i = 1; i < end; i++) {
     const line = lines[i];
+    // Continue multi-line value (indented lines after a `|` key)
+    if (multiKey && (line.startsWith('  ') || line.trim() === '')) {
+      multiVal.push(line.replace(/^  /, ''));
+      continue;
+    }
+    // Flush pending multi-line value
+    if (multiKey) {
+      fm[multiKey] = multiVal.join('\n').trim().replace(/\|\s*$/, '').trim();
+      multiKey = null;
+      multiVal = [];
+    }
+
     const colonIdx = line.indexOf(':');
     if (colonIdx === -1) continue;
     const key = line.slice(0, colonIdx).trim();
     let val = line.slice(colonIdx + 1).trim();
+
+    // Multi-line indicator: value is `|`
+    if (val === '|' || val.startsWith('|')) {
+      multiKey = key;
+      multiVal = [];
+      if (val.length > 1) multiVal.push(val.slice(1).trim());
+      continue;
+    }
+
+    // Strip quotes
     if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
       val = val.slice(1, -1);
     }
     fm[key] = val;
+  }
+  // Flush last multi-line value
+  if (multiKey) {
+    fm[multiKey] = multiVal.join('\n').trim();
   }
   return fm;
 }
@@ -177,10 +254,10 @@ function extractUsageSection(content) {
   return sections;
 }
 
-function getSkillInfo(name) {
-  const skillPath = path.join(AGENTS_DIR, name);
+function getSkillInfo(name, basePath, platform) {
+  const skillPath = path.join(basePath, name);
   const mdPath = path.join(skillPath, 'SKILL.md');
-  const symlinkPath = path.join(CLAUDE_DIR, name);
+  const symlinkPath = platform === 'claude-code' ? path.join(CLAUDE_DIR, name) : null;
 
   if (!fs.existsSync(mdPath)) return null;
 
@@ -188,52 +265,116 @@ function getSkillInfo(name) {
   const fm = parseFrontmatter(content);
   const usageItems = extractUsageSection(content);
 
-  // Check symlink
+  // Check symlink (Claude Code only)
   let installType = '未知';
-  try {
-    if (fs.existsSync(symlinkPath)) {
-      const stat = fs.lstatSync(symlinkPath);
-      installType = stat.isSymbolicLink() ? '🌐 全局' : '📁 项目';
-    }
-  } catch { installType = '未知'; }
+  if (symlinkPath) {
+    try {
+      if (fs.existsSync(symlinkPath)) {
+        const stat = fs.lstatSync(symlinkPath);
+        installType = stat.isSymbolicLink() ? '🌐 全局' : '📁 项目';
+      }
+    } catch { installType = '未知'; }
+  } else {
+    installType = '📁 本地';
+  }
 
-  // Get file size for a rough gauge
+  // Get file size
   let fileSize = 0;
   try { fileSize = fs.statSync(mdPath).size; } catch {}
 
-  const meta = CATEGORIES[name] || { cat: '📦 其他', emoji: '📦' };
+  // Pick metadata from the correct mapping
+  const meta = (platform === 'codex' ? CODEX_CATEGORIES[name] : CATEGORIES[name])
+    || { cat: '📦 其他', emoji: '📦' };
+
+  const desc = platform === 'codex'
+    ? (CODEX_ZH_DESCRIPTIONS[name] || fm.description || '')
+    : (ZH_DESCRIPTIONS[name] || fm.description || '');
+
+  const projects = platform === 'codex'
+    ? (CODEX_SUITABLE_PROJECTS[name] || [])
+    : (SUITABLE_PROJECTS[name] || []);
+
+  const keywords = platform === 'codex'
+    ? (CODEX_TRIGGER_KEYWORDS[name] || [])
+    : (TRIGGER_KEYWORDS[name] || []);
+
+  // Determine compatibility
+  let compatibility = platform;
+  if (fm.compatibility) {
+    const compat = fm.compatibility.toLowerCase();
+    if (compat.includes('claude-code') && compat.includes('opencode')) {
+      compatibility = 'dual';
+    } else if (compat.includes('opencode') || compat.includes('codex')) {
+      compatibility = 'codex';
+    } else if (compat.includes('claude-code')) {
+      compatibility = 'claude-code';
+    }
+  }
 
   return {
     name: fm.name || name,
     dirName: name,
-    description: ZH_DESCRIPTIONS[name] || fm.description || '',
+    description: desc,
     descriptionEn: fm.description || '',
     category: meta.cat,
     emoji: meta.emoji,
     installType,
-    suitableProjects: SUITABLE_PROJECTS[name] || [],
-    triggerKeywords: TRIGGER_KEYWORDS[name] || [],
-    usageItems: usageItems.slice(0, 8), // limit to 8 items from markdown
+    suitableProjects: projects,
+    triggerKeywords: keywords,
+    usageItems: usageItems.slice(0, 8),
     fileSize,
+    platform,
+    compatibility,
+    version: fm.version || '',
     source: fm.license ? (fm.license.includes('Proprietary') ? 'Anthropic' : 'Community') : 'Community',
   };
 }
 
 function getAllSkills() {
   const skills = [];
-  if (!fs.existsSync(AGENTS_DIR)) return skills;
 
-  const dirs = fs.readdirSync(AGENTS_DIR, { withFileTypes: true })
-    .filter(d => d.isDirectory())
-    .map(d => d.name);
-
-  for (const name of dirs) {
-    const info = getSkillInfo(name);
-    if (info) skills.push(info);
+  // ── Claude Code skills ────────────────────────────────
+  if (fs.existsSync(AGENTS_DIR)) {
+    const dirs = fs.readdirSync(AGENTS_DIR, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => d.name);
+    for (const name of dirs) {
+      const info = getSkillInfo(name, AGENTS_DIR, 'claude-code');
+      if (info) skills.push(info);
+    }
   }
 
-  // Sort by category then name
+  // ── Codex skills (non-system) ─────────────────────────
+  if (fs.existsSync(CODEX_SKILLS_DIR)) {
+    const dirs = fs.readdirSync(CODEX_SKILLS_DIR, { withFileTypes: true })
+      .filter(d => d.isDirectory() && d.name !== '.system')
+      .map(d => d.name);
+    for (const name of dirs) {
+      const info = getSkillInfo(name, CODEX_SKILLS_DIR, 'codex');
+      if (info) skills.push(info);
+    }
+
+    // ── Codex system skills ─────────────────────────────
+    if (fs.existsSync(CODEX_SYSTEM_DIR)) {
+      const sysDirs = fs.readdirSync(CODEX_SYSTEM_DIR, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => d.name);
+      for (const name of sysDirs) {
+        const info = getSkillInfo(name, CODEX_SYSTEM_DIR, 'codex');
+        if (info) {
+          info.isSystem = true;
+          info.installType = '⚙️ 系统内置';
+          skills.push(info);
+        }
+      }
+    }
+  }
+
+  // Sort by platform, category, then name
   skills.sort((a, b) => {
+    const pa = a.platform === 'codex' ? 1 : 0;
+    const pb = b.platform === 'codex' ? 1 : 0;
+    if (pa !== pb) return pa - pb;
     if (a.category !== b.category) return a.category.localeCompare(b.category, 'zh');
     return a.name.localeCompare(b.name);
   });
@@ -292,37 +433,57 @@ const server = http.createServer((req, res) => {
   if (method === 'GET' && url.pathname === '/api/skills') {
     const skills = getAllSkills();
     const stats = {};
+    const platformStats = { 'claude-code': 0, 'codex': 0 };
     for (const s of skills) {
       stats[s.category] = (stats[s.category] || 0) + 1;
+      if (s.platform === 'claude-code') platformStats['claude-code']++;
+      else platformStats['codex']++;
     }
-    return sendJSON(res, { skills, stats, total: skills.length });
+    return sendJSON(res, { skills, stats, platformStats, total: skills.length });
   }
 
-  // API: Get single skill detail
+  // API: Get single skill detail — search both platforms
   if (method === 'GET' && url.pathname.startsWith('/api/skills/')) {
     const name = decodeURIComponent(url.pathname.replace('/api/skills/', ''));
-    const info = getSkillInfo(name);
+    // Try Claude Code first, then Codex, then Codex system
+    let info = getSkillInfo(name, AGENTS_DIR, 'claude-code')
+            || getSkillInfo(name, CODEX_SKILLS_DIR, 'codex')
+            || getSkillInfo(name, CODEX_SYSTEM_DIR, 'codex');
     if (!info) return sendJSON(res, { error: 'Skill not found' }, 404);
+    // Mark system skills
+    if (!info.isSystem && fs.existsSync(path.join(CODEX_SYSTEM_DIR, name))) info.isSystem = true;
     return sendJSON(res, info);
   }
 
-  // API: Delete skill
+  // API: Delete skill — handles both Claude Code and Codex
   if (method === 'DELETE' && url.pathname.startsWith('/api/skills/')) {
     const name = decodeURIComponent(url.pathname.replace('/api/skills/', ''));
     const agentPath = path.join(AGENTS_DIR, name);
     const claudeLink = path.join(CLAUDE_DIR, name);
+    const codexPath = path.join(CODEX_SKILLS_DIR, name);
+    const codexSysPath = path.join(CODEX_SYSTEM_DIR, name);
 
     const errors = [];
 
-    // Remove symlink
+    // Remove Claude Code symlink
     try {
       if (fs.existsSync(claudeLink)) fs.unlinkSync(claudeLink);
-    } catch (e) { errors.push('symlink: ' + e.message); }
+    } catch (e) { errors.push('claude symlink: ' + e.message); }
 
-    // Remove actual files
+    // Remove from ~/.agents/skills (Claude Code)
     try {
       if (fs.existsSync(agentPath)) fs.rmSync(agentPath, { recursive: true, force: true });
-    } catch (e) { errors.push('files: ' + e.message); }
+    } catch (e) { errors.push('claude files: ' + e.message); }
+
+    // Remove from ~/.codex/skills (Codex)
+    try {
+      if (fs.existsSync(codexPath)) fs.rmSync(codexPath, { recursive: true, force: true });
+    } catch (e) { errors.push('codex files: ' + e.message); }
+
+    // Remove from ~/.codex/skills/.system (Codex system)
+    try {
+      if (fs.existsSync(codexSysPath)) fs.rmSync(codexSysPath, { recursive: true, force: true });
+    } catch (e) { errors.push('codex system files: ' + e.message); }
 
     if (errors.length > 0) {
       return sendJSON(res, { success: false, errors }, 500);

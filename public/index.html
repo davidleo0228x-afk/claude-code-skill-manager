@@ -227,6 +227,13 @@ main { padding: 28px 32px 60px; }
 }
 .badge-cat { background: rgba(108,140,255,.12); color: var(--accent); }
 .badge-type { background: rgba(74,222,128,.12); color: var(--green); }
+.badge-platform {
+  font-size: 10px; font-weight: 700; padding: 3px 8px;
+  border-radius: 20px; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.3px;
+}
+.badge-cc { background: rgba(108,140,255,.15); color: var(--accent); }
+.badge-codex { background: rgba(250,204,21,.12); color: var(--yellow); }
+.badge-dual { background: rgba(74,222,128,.12); color: var(--green); }
 .badge-project {
   background: var(--surface2); color: var(--text3);
   border: 1px solid var(--border);
@@ -483,7 +490,9 @@ function animateCards() {
 // ─── State ──────────────────────────────────────────────────
 let allSkills = [];
 let stats = {};
+let platformStats = {};
 let activeCategory = null;
+let activePlatform = null;
 let searchQuery = '';
 let lastSkillCount = 0;
 let lastUpdated = null;
@@ -496,6 +505,7 @@ async function fetchSkills() {
   const data = await res.json();
   allSkills = data.skills;
   stats = data.stats;
+  platformStats = data.platformStats || {};
   lastUpdated = new Date();
   return data;
 }
@@ -509,6 +519,7 @@ async function deleteSkill(name) {
 function filterSkills() {
   return allSkills.filter(s => {
     if (activeCategory && s.category !== activeCategory) return false;
+    if (activePlatform && s.platform !== activePlatform) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const haystack = [
@@ -523,11 +534,20 @@ function filterSkills() {
 
 function renderStats() {
   const bar = document.getElementById('statsBar');
-  const totalChip = `<button class="stat-chip${!activeCategory ? ' active' : ''}" onclick="setCategory(null)">全部 (${allSkills.length})</button>`;
+  const totalChip = `<button class="stat-chip${!activeCategory && !activePlatform ? ' active' : ''}" onclick="setCategory(null); setPlatform(null)">全部 (${allSkills.length})</button>`;
+  const ccChip = `<button class="stat-chip${activePlatform === 'claude-code' ? ' active' : ''}" onclick="setPlatform('claude-code')">🧩 Claude · ${platformStats['claude-code'] || 0}</button>`;
+  const codexChip = `<button class="stat-chip${activePlatform === 'codex' ? ' active' : ''}" onclick="setPlatform('codex')">🤖 Codex · ${platformStats['codex'] || 0}</button>`;
   const catChips = Object.entries(stats).map(([cat, count]) =>
-    `<button class="stat-chip${activeCategory === cat ? ' active' : ''}" onclick="setCategory('${cat.replace(/'/g, "\\'")}')">${cat} · ${count}</button>`
+    `<button class="stat-chip${activeCategory === cat ? ' active' : ''}" onclick="setCategory('${cat.replace(/'/g, "\\'")}'); setPlatform(null)">${cat} · ${count}</button>`
   ).join('');
-  bar.innerHTML = totalChip + catChips;
+  bar.innerHTML = totalChip + ccChip + codexChip + catChips;
+}
+
+function setPlatform(platform) {
+  activePlatform = platform;
+  activeCategory = null;
+  renderStats();
+  renderCards();
 }
 
 function renderCards() {
@@ -558,8 +578,8 @@ function renderCards() {
       </div>
       <div class="card-desc">${escHtml(s.description).slice(0, 120)}</div>
       <div class="card-meta">
+        <span class="badge badge-platform ${s.platform === 'codex' ? 'badge-codex' : 'badge-cc'}">${s.platform === 'codex' ? '🤖 Codex' : '🧩 Claude'}</span>
         <span class="badge badge-cat">${s.category}</span>
-        <span class="badge badge-type">${s.installType}</span>
         ${projectTags}
       </div>
       <div class="card-keywords">
@@ -601,10 +621,10 @@ function openDetail(dirName) {
           ${s.descriptionEn && s.descriptionEn !== s.description ? `<div class="modal-desc" style="margin-top:8px;font-size:12px;color:var(--text3);border-left:2px solid var(--border);padding-left:12px;">${escHtml(s.descriptionEn)}</div>` : ''}
         </div>
         <div class="modal-section">
-          <div class="modal-label">📂 分类</div>
+          <div class="modal-label">📂 分类 / 平台</div>
           <div class="tag-list">
+            <span class="badge badge-platform ${s.platform === 'codex' ? 'badge-codex' : 'badge-cc'}" style="font-size:13px;padding:6px 14px;">${s.platform === 'codex' ? '🤖 Codex' : '🧩 Claude Code'}${s.compatibility === 'dual' ? ' (兼容双平台)' : ''}</span>
             <span class="badge badge-cat" style="font-size:13px;padding:6px 14px;">${s.category}</span>
-            <span class="badge badge-type" style="font-size:13px;padding:6px 14px;">${s.installType}</span>
           </div>
         </div>
         ${s.suitableProjects.length ? `
@@ -794,6 +814,7 @@ function startAutoRefresh() {
       if (newSkills.length || removed.length) {
         allSkills = data.skills;
         stats = data.stats;
+        platformStats = data.platformStats || {};
         lastUpdated = new Date();
         let msg = [];
         if (newSkills.length) msg.push(`🎉 检测到新 Skill: ${newSkills.map(s => s.name).join(', ')}`);
