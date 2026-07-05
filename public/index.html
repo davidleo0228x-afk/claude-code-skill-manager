@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skill Manager</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="1254x1254" href="/icon.png">
+<style>
+/* ─── Reset & Base ───────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0b0d14;
+  --surface: #141720;
+  --surface2: #1a1d2a;
+  --border: #252836;
+  --text: #e1e4ed;
+  --text2: #9498a8;
+  --text3: #636882;
+  --accent: #6c8cff;
+  --accent2: #a78bfa;
+  --green: #4ade80;
+  --orange: #fb923c;
+  --red: #f87171;
+  --pink: #f472b6;
+  --cyan: #22d3ee;
+  --yellow: #facc15;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+  --transition: 180ms cubic-bezier(.4,0,.2,1);
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Sync Progress Bar ─────────────────────────────── */
+.sync-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 999;
+  pointer-events: none; opacity: 0; transition: opacity 200ms;
+}
+.sync-bar.active { opacity: 1; }
+.sync-bar-fill {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, var(--accent), var(--accent2), var(--cyan));
+  border-radius: 0 2px 2px 0;
+}
+.sync-bar.active .sync-bar-fill {
+  animation: syncBounce 1.2s cubic-bezier(.2,.5,.3,1) infinite;
+}
+@keyframes syncBounce {
+  0%   { width: 0; margin-left: 0; }
+  30%  { width: 60%; margin-left: 0; }
+  60%  { width: 85%; margin-left: 10%; }
+  90%  { width: 95%; margin-left: 5%; }
+  100% { width: 0; margin-left: 100%; }
+}
+
+/* ─── Shimmer ────────────────────────────────────────── */
+.skill-grid.refreshing .card {
+  pointer-events: none;
+}
+.skill-grid.refreshing .card::after {
+  content: '';
+  position: absolute; inset: 0; z-index: 10;
+  background: linear-gradient(105deg,
+    transparent 35%,
+    rgba(255,255,255,.03) 45%,
+    rgba(255,255,255,.06) 50%,
+    rgba(255,255,255,.03) 55%,
+    transparent 65%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Card entrance stagger ──────────────────────────── */
+.skill-grid.stagger .card {
+  animation: cardIn .35s ease-out both;
+}
+.skill-grid.stagger .card:nth-child(1) { animation-delay: .00s; }
+.skill-grid.stagger .card:nth-child(2) { animation-delay: .03s; }
+.skill-grid.stagger .card:nth-child(3) { animation-delay: .06s; }
+.skill-grid.stagger .card:nth-child(4) { animation-delay: .09s; }
+.skill-grid.stagger .card:nth-child(5) { animation-delay: .12s; }
+.skill-grid.stagger .card:nth-child(6) { animation-delay: .15s; }
+.skill-grid.stagger .card:nth-child(7) { animation-delay: .18s; }
+.skill-grid.stagger .card:nth-child(8) { animation-delay: .21s; }
+.skill-grid.stagger .card:nth-child(9) { animation-delay: .24s; }
+.skill-grid.stagger .card:nth-child(10) { animation-delay: .27s; }
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(12px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ─── Header ─────────────────────────────────────────── */
+header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(11,13,20,.96);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 24px;
+}
+header h1 {
+  font-size: 22px; font-weight: 700;
+  letter-spacing: -0.4px;
+  white-space: nowrap;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.header-right { display: flex; align-items: center; gap: 16px; flex: 1; }
+
+/* ─── Search ──────────────────────────────────────────── */
+.search-wrap {
+  position: relative; flex: 1; max-width: 400px;
+}
+.search-wrap input {
+  width: 100%; padding: 10px 16px 10px 42px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 24px; color: var(--text); font-size: 14px;
+  outline: none; transition: var(--transition);
+}
+.search-wrap input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(108,140,255,.15);
+}
+.search-wrap input::placeholder { color: var(--text3); }
+.search-icon {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--text3); pointer-events: none; font-size: 16px;
+}
+
+/* ─── Stats Bar ───────────────────────────────────────── */
+.stats-bar {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.stat-chip {
+  font-size: 12px; font-weight: 600;
+  padding: 5px 12px; border-radius: 20px;
+  background: var(--surface2); color: var(--text2);
+  border: 1px solid var(--border);
+  cursor: pointer; transition: var(--transition);
+  white-space: nowrap;
+  user-select: none;
+}
+.stat-chip:hover { border-color: var(--accent); color: var(--text); }
+.stat-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ─── Main ────────────────────────────────────────────── */
+main { padding: 28px 32px 60px; }
+.skill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+/* ─── Card ────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(108,140,255,.06), transparent 40%);
+  opacity: 0; transition: opacity 300ms;
+}
+.card:hover::before { opacity: 1; }
+.card:hover {
+  border-color: rgba(108,140,255,.3);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+.card:active {
+  transform: scale(.97);
+  transition: transform 100ms ease-out;
+}
+
+/* ─── Card click ripple ──────────────────────────────── */
+.ripple {
+  position: absolute; border-radius: 50%;
+  background: rgba(108,140,255,.25);
+  transform: scale(0);
+  animation: rippleAnim .6s ease-out forwards;
+  pointer-events: none; z-index: 5;
+}
+@keyframes rippleAnim {
+  to { transform: scale(4); opacity: 0; }
+}
+.card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.card-name {
+  font-size: 16px; font-weight: 650; letter-spacing: -0.2px;
+  color: var(--text);
+}
+.card-emoji { font-size: 20px; flex-shrink: 0; }
+.card-desc {
+  font-size: 13px; color: var(--text2);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; margin-bottom: 12px; line-height: 1.5;
+}
+.card-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.badge {
+  font-size: 11px; font-weight: 600; padding: 3px 10px;
+  border-radius: 20px; white-space: nowrap;
+}
+.badge-cat { background: rgba(108,140,255,.12); color: var(--accent); }
+.badge-type { background: rgba(74,222,128,.12); color: var(--green); }
+.badge-project {
+  background: var(--surface2); color: var(--text3);
+  border: 1px solid var(--border);
+}
+.card-keywords {
+  display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px;
+}
+.card-actions {
+  display: flex; gap: 8px; margin-top: 14px;
+}
+.btn {
+  font-size: 12px; font-weight: 600; padding: 7px 16px;
+  border-radius: 20px; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text2);
+  cursor: pointer; transition: var(--transition);
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--accent); color: var(--text); }
+.btn-danger { color: var(--red); }
+.btn-danger:hover { background: rgba(248,113,113,.1); border-color: var(--red); }
+.refresh-btn {
+  font-size: 12px; font-weight: 600; padding: 7px 16px;
+  border-radius: 20px; border: 1px solid var(--accent);
+  background: rgba(108,140,255,.1); color: var(--accent);
+  cursor: pointer; transition: var(--transition);
+  white-space: nowrap; flex-shrink: 0;
+}
+.refresh-btn:hover { background: var(--accent); color: #fff; }
+.refresh-btn.spinning .refresh-icon { animation: spin .8s linear infinite; display: inline-block; }
+.refresh-icon { display: inline-block; margin-right: 2px; }
+
+/* ─── Empty State ─────────────────────────────────────── */
+.empty {
+  text-align: center; padding: 80px 20px; color: var(--text3);
+}
+.empty-icon { font-size: 56px; margin-bottom: 16px; }
+.empty h2 { font-size: 18px; color: var(--text2); margin-bottom: 8px; }
+
+/* ─── Modal ───────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,.78);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  animation: fadeIn 150ms ease-out;
+  will-change: opacity;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  max-width: 640px; width: 100%; max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  animation: slideUp 200ms cubic-bezier(.22,.61,.36,1);
+  will-change: transform;
+  transform: translateZ(0);
+}
+@keyframes slideUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.modal-header {
+  padding: 24px 28px 16px;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--surface);
+  border-radius: 16px 16px 0 0;
+}
+.modal-title {
+  font-size: 20px; font-weight: 700; letter-spacing: -0.3px;
+  display: flex; align-items: center; gap: 10px;
+}
+.modal-close {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--surface2);
+  color: var(--text2); cursor: pointer; font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--transition); flex-shrink: 0;
+}
+.modal-close:hover { background: var(--border); color: var(--text); }
+.modal-body { padding: 24px 28px 28px; }
+.modal-section { margin-bottom: 20px; }
+.modal-section:last-child { margin-bottom: 0; }
+.modal-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; color: var(--text3); margin-bottom: 10px;
+}
+.modal-desc { font-size: 14px; color: var(--text2); line-height: 1.7; }
+.tag-list { display: flex; gap: 6px; flex-wrap: wrap; }
+.tag {
+  font-size: 12px; padding: 5px 12px;
+  border-radius: 20px;
+  background: var(--surface2); color: var(--text2);
+  border: 1px solid var(--border);
+}
+.tag-keyword { background: rgba(167,139,250,.1); color: var(--accent2); border-color: rgba(167,139,250,.2); }
+.tag-project { background: rgba(74,222,128,.08); color: var(--green); border-color: rgba(74,222,128,.15); }
+.tag-usage {
+  background: var(--surface2); color: var(--text2);
+  border: 1px solid var(--border);
+  text-align: left; white-space: normal;
+  display: block; padding: 8px 14px; border-radius: 8px;
+  font-size: 13px; margin-bottom: 4px;
+}
+.modal-footer {
+  padding: 20px 28px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 12px; justify-content: flex-end;
+}
+.modal-footer .btn { padding: 9px 22px; font-size: 13px; border-radius: 10px; }
+.modal-footer .btn-danger {
+  background: rgba(248,113,113,.08);
+  border-color: rgba(248,113,113,.2);
+  color: var(--red);
+}
+.modal-footer .btn-danger:hover { background: var(--red); color: #fff; border-color: var(--red); }
+
+/* ─── Toast ───────────────────────────────────────────── */
+.toast-container {
+  position: fixed; bottom: 24px; right: 24px; z-index: 300;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  padding: 14px 20px; border-radius: 10px;
+  font-size: 13px; font-weight: 600;
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  animation: slideIn 250ms ease-out;
+  min-width: 200px; max-width: 360px;
+}
+.toast.success { border-color: rgba(74,222,128,.3); }
+.toast.error { border-color: rgba(248,113,113,.3); color: var(--red); }
+@keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100px); opacity: 0; } }
+
+/* ─── Loading ─────────────────────────────────────────── */
+.loading { text-align: center; padding: 80px; color: var(--text3); }
+.spinner {
+  width: 40px; height: 40px; margin: 0 auto 16px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Responsive ──────────────────────────────────────── */
+@media (max-width: 768px) {
+  header { flex-direction: column; align-items: flex-start; padding: 16px 20px; gap: 12px; }
+  .header-right { flex-direction: column; width: 100%; }
+  .search-wrap { max-width: 100%; }
+  .skill-grid { grid-template-columns: 1fr; }
+  main { padding: 20px; }
+  .stats-bar { gap: 4px; }
+  .stat-chip { font-size: 11px; padding: 4px 10px; }
+  .modal { margin: 12px; max-height: 90vh; }
+  .modal-header, .modal-body, .modal-footer { padding-left: 20px; padding-right: 20px; }
+
+/* ─── Hide Scrollbar ─────────────────────────────────── */
+.modal::-webkit-scrollbar { display: none; }
+.modal { scrollbar-width: none; -ms-overflow-style: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="sync-bar" id="syncBar"><div class="sync-bar-fill"></div></div>
+<header>
+  <h1>🧩 Skill Manager</h1>
+  <div class="header-right">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search" placeholder="搜索 Skill 名称、关键词、项目类型…" autocomplete="off">
+    </div>
+    <div class="stats-bar" id="statsBar"></div>
+    <button class="btn refresh-btn" id="refreshBtn" onclick="manualRefresh()" title="同步最新 Skill"><span class="refresh-icon">🔄</span> 同步</button>
+  </div>
+</header>
+
+<main>
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <div>正在加载 Skills…</div>
+  </div>
+  <div class="skill-grid" id="grid" style="display:none"></div>
+  <div class="empty" id="empty" style="display:none">
+    <div class="empty-icon">📭</div>
+    <h2>没有匹配的 Skill</h2>
+    <p>试试其他搜索词或清除筛选条件</p>
+  </div>
+</main>
+
+<div class="toast-container" id="toastContainer"></div>
+<div id="modalContainer"></div>
+
+<script>
+// ─── State ──────────────────────────────────────────────────
+let allSkills = [];
+let stats = {};
+let activeCategory = null;
+let searchQuery = '';
+let lastSkillCount = 0;
+let lastUpdated = null;
+let autoRefreshInterval = null;
+
+// ─── API ────────────────────────────────────────────────────
+const API = '/api/skills';
+async function fetchSkills() {
+  const res = await fetch(API);
+  const data = await res.json();
+  allSkills = data.skills;
+  stats = data.stats;
+  lastUpdated = new Date();
+  return data;
+}
+
+async function deleteSkill(name) {
+  const res = await fetch(`${API}/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  return res.json();
+}
+
+// ─── Render ─────────────────────────────────────────────────
+function filterSkills() {
+  return allSkills.filter(s => {
+    if (activeCategory && s.category !== activeCategory) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const haystack = [
+        s.name, s.description, s.category,
+        ...s.suitableProjects, ...s.triggerKeywords
+      ].join(' ').toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderStats() {
+  const bar = document.getElementById('statsBar');
+  const totalChip = `<button class="stat-chip${!activeCategory ? ' active' : ''}" onclick="setCategory(null)">全部 (${allSkills.length})</button>`;
+  const catChips = Object.entries(stats).map(([cat, count]) =>
+    `<button class="stat-chip${activeCategory === cat ? ' active' : ''}" onclick="setCategory('${cat.replace(/'/g, "\\'")}')">${cat} · ${count}</button>`
+  ).join('');
+  bar.innerHTML = totalChip + catChips;
+}
+
+function renderCards() {
+  const filtered = filterSkills();
+  const grid = document.getElementById('grid');
+  const empty = document.getElementById('empty');
+  const loading = document.getElementById('loading');
+
+  loading.style.display = 'none';
+
+  if (filtered.length === 0) {
+    grid.style.display = 'none';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  grid.style.display = '';
+
+  grid.innerHTML = filtered.map(s => {
+    const projectTags = s.suitableProjects.slice(0, 3).map(p =>
+      `<span class="badge badge-project">${p}</span>`
+    ).join('');
+    return `
+    <div class="card" onclick="openDetail('${s.dirName.replace(/'/g, "\\'")}')" data-skill="${s.dirName}">
+      <div class="card-top">
+        <span class="card-name">${s.emoji} ${s.name}</span>
+      </div>
+      <div class="card-desc">${escHtml(s.description).slice(0, 120)}</div>
+      <div class="card-meta">
+        <span class="badge badge-cat">${s.category}</span>
+        <span class="badge badge-type">${s.installType}</span>
+        ${projectTags}
+      </div>
+      <div class="card-keywords">
+        ${s.triggerKeywords.slice(0, 5).map(k => `<span class="tag tag-keyword">${k}</span>`).join('')}
+      </div>
+      <div class="card-actions" onclick="event.stopPropagation()">
+        <button class="btn" onclick="openDetail('${s.dirName.replace(/'/g, "\\'")}')">📋 详情</button>
+        <button class="btn btn-danger" onclick="confirmDelete('${s.dirName.replace(/'/g, "\\'")}', '${s.name.replace(/'/g, "\\'")}')">🗑 删除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ─── Detail Modal ───────────────────────────────────────────
+function openDetail(dirName) {
+  const s = allSkills.find(sk => sk.dirName === dirName);
+  if (!s) return;
+
+  const html = `
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">${s.emoji} ${escHtml(s.name)}</div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-section">
+          <div class="modal-label">📝 简介</div>
+          <div class="modal-desc">${escHtml(s.description)}</div>
+          ${s.descriptionEn && s.descriptionEn !== s.description ? `<div class="modal-desc" style="margin-top:8px;font-size:12px;color:var(--text3);border-left:2px solid var(--border);padding-left:12px;">${escHtml(s.descriptionEn)}</div>` : ''}
+        </div>
+        <div class="modal-section">
+          <div class="modal-label">📂 分类</div>
+          <div class="tag-list">
+            <span class="badge badge-cat" style="font-size:13px;padding:6px 14px;">${s.category}</span>
+            <span class="badge badge-type" style="font-size:13px;padding:6px 14px;">${s.installType}</span>
+          </div>
+        </div>
+        ${s.suitableProjects.length ? `
+        <div class="modal-section">
+          <div class="modal-label">🎯 适合的项目</div>
+          <div class="tag-list">
+            ${s.suitableProjects.map(p => `<span class="tag tag-project">${p}</span>`).join('')}
+          </div>
+        </div>` : ''}
+        ${s.triggerKeywords.length ? `
+        <div class="modal-section">
+          <div class="modal-label">💬 触发关键词</div>
+          <div class="tag-list">
+            ${s.triggerKeywords.map(k => `<span class="tag tag-keyword">${k}</span>`).join('')}
+          </div>
+        </div>` : ''}
+        ${s.usageItems.length ? `
+        <div class="modal-section">
+          <div class="modal-label">📋 使用场景</div>
+          ${s.usageItems.map(u => `<div class="tag tag-usage">▸ ${u}</div>`).join('')}
+        </div>` : ''}
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal()">关闭</button>
+        <button class="btn btn-danger" onclick="confirmDelete('${s.dirName.replace(/'/g, "\\'")}', '${s.name.replace(/'/g, "\\'")}'); closeModal();">🗑 删除此 Skill</button>
+      </div>
+    </div>
+  </div>`;
+
+  document.body.style.overflow = 'hidden';
+  document.getElementById('modalContainer').innerHTML = html;
+  // Clean up GPU layer after animation
+  const modal = document.querySelector('.modal');
+  if (modal) {
+    modal.addEventListener('animationend', () => { modal.style.willChange = 'auto'; }, { once: true });
+    const overlay = document.querySelector('.modal-overlay');
+    if (overlay) overlay.addEventListener('animationend', () => { overlay.style.willChange = 'auto'; }, { once: true });
+  }
+}
+
+function closeModal() {
+  document.getElementById('modalContainer').innerHTML = '';
+  document.body.style.overflow = '';
+}
+
+// ─── Delete ─────────────────────────────────────────────────
+function confirmDelete(dirName, displayName) {
+  if (!confirm(`确定要删除 "${displayName}" 吗？\n\n这将移除符号链接和所有文件。此操作不可撤销。`)) return;
+
+  deleteSkill(dirName).then(result => {
+    if (result.success) {
+      allSkills = allSkills.filter(s => s.dirName !== dirName);
+      stats = {};
+      allSkills.forEach(s => { stats[s.category] = (stats[s.category] || 0) + 1; });
+      renderStats();
+      renderCards();
+      showToast(`✅ 已删除 "${displayName}"`, 'success');
+    } else {
+      showToast(`❌ 删除失败: ${(result.errors||[]).join(', ')}`, 'error');
+    }
+  });
+}
+
+// ─── Toast ──────────────────────────────────────────────────
+function showToast(msg, type) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 250ms ease-out forwards';
+    setTimeout(() => toast.remove(), 250);
+  }, 3000);
+}
+
+// ─── Category Filter ────────────────────────────────────────
+function setCategory(cat) {
+  activeCategory = cat;
+  renderStats();
+  renderCards();
+}
+
+// ─── Search ─────────────────────────────────────────────────
+let searchTimeout;
+document.getElementById('search').addEventListener('input', function() {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    searchQuery = this.value.trim();
+    renderCards();
+  }, 150);
+});
+
+// ─── Keyboard ───────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    document.getElementById('search').focus();
+  }
+});
+
+// ─── Card hover effect ──────────────────────────────────────
+document.addEventListener('mousemove', e => {
+  const card = e.target.closest('.card');
+  if (!card) return;
+  const rect = card.getBoundingClientRect();
+  card.style.setProperty('--mouse-x', `${e.clientX - rect.left}px`);
+  card.style.setProperty('--mouse-y', `${e.clientY - rect.top}px`);
+});
+
+// ─── Card click ripple ──────────────────────────────────────
+document.addEventListener('click', e => {
+  const card = e.target.closest('.card');
+  if (!card) return;
+  const ripple = document.createElement('span');
+  ripple.className = 'ripple';
+  const rect = card.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height);
+  ripple.style.width = ripple.style.height = `${size}px`;
+  ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+  ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+  card.appendChild(ripple);
+  ripple.addEventListener('animationend', () => ripple.remove());
+});
+
+// ─── Refresh ────────────────────────────────────────────────
+function startSyncAnim() {
+  document.getElementById('syncBar').classList.add('active');
+  document.getElementById('grid').classList.add('refreshing');
+}
+
+function stopSyncAnim() {
+  document.getElementById('syncBar').classList.remove('active');
+  document.getElementById('grid').classList.remove('refreshing');
+  // Entrance stagger
+  const grid = document.getElementById('grid');
+  grid.classList.add('stagger');
+  setTimeout(() => grid.classList.remove('stagger'), 500);
+}
+
+async function manualRefresh() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  btn.disabled = true;
+  startSyncAnim();
+
+  const prevNames = new Set(allSkills.map(s => s.dirName));
+  try {
+    // Small delay so the animation is visible even on fast responses
+    const [data] = await Promise.all([
+      fetchSkills(),
+      new Promise(r => setTimeout(r, 400))
+    ]);
+
+    const newNames = new Set(allSkills.map(s => s.dirName));
+    const added = allSkills.filter(s => !prevNames.has(s.dirName));
+    const removed = [...prevNames].filter(n => !newNames.has(n));
+
+    if (added.length || removed.length) {
+      let msg = [];
+      if (added.length) msg.push(`🎉 新增 ${added.length} 个: ${added.map(s => s.name).join(', ')}`);
+      if (removed.length) msg.push(`🗑 移除 ${removed.length} 个: ${removed.join(', ')}`);
+      showToast(msg.join('  |  '), 'success');
+    }
+
+    lastSkillCount = allSkills.length;
+    renderStats();
+    renderCards();
+  } catch (err) {
+    showToast(`❌ 同步失败: ${err.message}`, 'error');
+  } finally {
+    btn.classList.remove('spinning');
+    btn.disabled = false;
+    stopSyncAnim();
+  }
+}
+
+function startAutoRefresh() {
+  // Poll every 30 seconds for new skills
+  autoRefreshInterval = setInterval(async () => {
+    try {
+      const res = await fetch(API);
+      const data = await res.json();
+      const currentNames = new Set(allSkills.map(s => s.dirName));
+      const newSkills = data.skills.filter(s => !currentNames.has(s.dirName));
+      const removed = [...currentNames].filter(n => !data.skills.find(s => s.dirName === n));
+
+      if (newSkills.length || removed.length) {
+        allSkills = data.skills;
+        stats = data.stats;
+        lastUpdated = new Date();
+        let msg = [];
+        if (newSkills.length) msg.push(`🎉 检测到新 Skill: ${newSkills.map(s => s.name).join(', ')}`);
+        if (removed.length) msg.push(`🗑 已移除: ${removed.join(', ')}`);
+        showToast(msg.join('  |  '), 'success');
+        lastSkillCount = allSkills.length;
+        renderStats();
+        renderCards();
+      }
+    } catch {} // silent fail for auto-poll
+  }, 30000);
+}
+
+// ─── Init ───────────────────────────────────────────────────
+fetchSkills().then(() => {
+  lastSkillCount = allSkills.length;
+  renderStats();
+  renderCards();
+  // Entrance animation
+  setTimeout(() => {
+    document.getElementById('grid').classList.add('stagger');
+    setTimeout(() => document.getElementById('grid').classList.remove('stagger'), 500);
+  }, 100);
+  startAutoRefresh();
+}).catch(err => {
+  document.getElementById('loading').innerHTML =
+    `<div style="color:var(--red)">❌ 加载失败: ${escHtml(err.message)}</div>`;
+});
+</script>
+</body>
+</html>
