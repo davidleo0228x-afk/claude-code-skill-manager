@@ -40,7 +40,9 @@
 
 ## 📸 Screenshots / 截图
 
-> *(Add screenshots here — run the app and take some! / 运行应用后截图放在这里)*
+<p align="center">
+  <img src="public/screenshot.png" alt="Skill Manager Screenshot" width="800">
+</p>
 
 ---
 
