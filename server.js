@@ -185,33 +185,62 @@ function parseFrontmatter(content) {
   const end = lines.indexOf('---', 1);
   if (end === -1) return {};
   const fm = {};
-  let multiKey = null;
-  let multiVal = [];
+
+  // State machine: 'normal' | 'multiline' (|) | 'array' (- items)
+  let state = 'normal';
+  let collectKey = null;
+  let collectVal = [];
 
   for (let i = 1; i < end; i++) {
     const line = lines[i];
-    // Continue multi-line value (indented lines after a `|` key)
-    if (multiKey && (line.startsWith('  ') || line.trim() === '')) {
-      multiVal.push(line.replace(/^  /, ''));
+
+    // ── Continue multiline (indented lines after a `|` key) ──────────
+    if (state === 'multiline' && (line.startsWith('  ') || line.trim() === '')) {
+      collectVal.push(line.replace(/^  /, ''));
       continue;
     }
-    // Flush pending multi-line value
-    if (multiKey) {
-      fm[multiKey] = multiVal.join('\n').trim().replace(/\|\s*$/, '').trim();
-      multiKey = null;
-      multiVal = [];
+
+    // ── Continue YAML array (indented `- item` lines) ────────────────
+    if (state === 'array' && /^  - /.test(line)) {
+      collectVal.push(line.replace(/^  - /, '').trim());
+      continue;
     }
 
+    // ── Flush current collection ─────────────────────────────────────
+    if (state === 'multiline') {
+      fm[collectKey] = collectVal.join('\n').trim().replace(/\|\s*$/, '').trim();
+    } else if (state === 'array') {
+      fm[collectKey] = collectVal;
+    }
+    state = 'normal';
+    collectKey = null;
+    collectVal = [];
+
+    // ── Parse key: value ─────────────────────────────────────────────
     const colonIdx = line.indexOf(':');
     if (colonIdx === -1) continue;
     const key = line.slice(0, colonIdx).trim();
     let val = line.slice(colonIdx + 1).trim();
 
-    // Multi-line indicator: value is `|`
+    // Multi-line indicator: value starts with `|`
     if (val === '|' || val.startsWith('|')) {
-      multiKey = key;
-      multiVal = [];
-      if (val.length > 1) multiVal.push(val.slice(1).trim());
+      state = 'multiline';
+      collectKey = key;
+      collectVal = [];
+      if (val.length > 1) collectVal.push(val.slice(1).trim());
+      continue;
+    }
+
+    // YAML array: empty value (key:) followed by indented `- item`
+    if (val === '' || val === '[]') {
+      const nextLine = (i + 1 < end) ? lines[i + 1] : '';
+      if (/^  - /.test(nextLine)) {
+        state = 'array';
+        collectKey = key;
+        collectVal = [];
+        continue;
+      }
+      fm[key] = '';
       continue;
     }
 
@@ -221,10 +250,14 @@ function parseFrontmatter(content) {
     }
     fm[key] = val;
   }
-  // Flush last multi-line value
-  if (multiKey) {
-    fm[multiKey] = multiVal.join('\n').trim();
+
+  // ── Flush final collection ─────────────────────────────────────────
+  if (state === 'multiline') {
+    fm[collectKey] = collectVal.join('\n').trim();
+  } else if (state === 'array') {
+    fm[collectKey] = collectVal;
   }
+
   return fm;
 }
 
@@ -252,6 +285,44 @@ function extractUsageSection(content) {
   }
   sections.push(...sectionLines);
   return sections;
+}
+
+// Parse tags from frontmatter — handles YAML array, comma-separated, single value
+function parseTagsField(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
+  if (typeof raw !== 'string') return [];
+  const trimmed = raw.trim();
+  // YAML inline array: [tag1, tag2, tag3]
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    return trimmed.slice(1, -1).split(',')
+      .map(t => t.trim().replace(/^["']|["']$/g, ''))
+      .filter(Boolean);
+  }
+  // Comma-separated or newline-separated
+  if (trimmed.includes(',')) {
+    return trimmed.split(',').map(t => t.trim()).filter(Boolean);
+  }
+  return [trimmed];
+}
+
+// Guess an emoji for a user-defined category name
+function guessCategoryEmoji(cat) {
+  const lower = cat.toLowerCase();
+  if (/design|ui|设计|样式|视觉/.test(lower)) return '🎨';
+  if (/animation|motion|动画|动效|scroll/.test(lower)) return '✨';
+  if (/ppt|slide|演示|present/.test(lower)) return '📊';
+  if (/react|frontend|前端|next/.test(lower)) return '⚛️';
+  if (/deploy|部署|ci|cd|server|运维/.test(lower)) return '🚀';
+  if (/writing|写作|文档|doc/.test(lower)) return '📝';
+  if (/tool|工具|util|helper/.test(lower)) return '🔧';
+  if (/ai|llm|gpt|model|模型/.test(lower)) return '🤖';
+  if (/system|系统|plugin|插件/.test(lower)) return '⚙️';
+  if (/data|数据|database|db/.test(lower)) return '🗄️';
+  if (/test|测试|qa/.test(lower)) return '🧪';
+  if (/security|安全|auth/.test(lower)) return '🔒';
+  if (/image|图片|imagegen/.test(lower)) return '🖼️';
+  return '📦';
 }
 
 function getSkillInfo(name, basePath, platform) {
@@ -282,21 +353,31 @@ function getSkillInfo(name, basePath, platform) {
   let fileSize = 0;
   try { fileSize = fs.statSync(mdPath).size; } catch {}
 
-  // Pick metadata from the correct mapping
-  const meta = (platform === 'codex' ? CODEX_CATEGORIES[name] : CATEGORIES[name])
-    || { cat: '📦 其他', emoji: '📦' };
+  // ── Frontmatter fallbacks for unknown/new skills ──────────────────────
+  const fmTags = parseTagsField(fm.tags || fm.keywords);
+  const fmCategory = fm.category || null;
 
+  // Pick metadata from the correct mapping; fall back to frontmatter → generic
+  let meta = platform === 'codex' ? CODEX_CATEGORIES[name] : CATEGORIES[name];
+  if (!meta && fmCategory) {
+    meta = { cat: fmCategory, emoji: guessCategoryEmoji(fmCategory) };
+  }
+  if (!meta) meta = { cat: '📦 其他', emoji: '📦' };
+
+  // Description: predefined → frontmatter description → empty
   const desc = platform === 'codex'
     ? (CODEX_ZH_DESCRIPTIONS[name] || fm.description || '')
     : (ZH_DESCRIPTIONS[name] || fm.description || '');
 
+  // Suitable projects: predefined only (no standard frontmatter field for this)
   const projects = platform === 'codex'
     ? (CODEX_SUITABLE_PROJECTS[name] || [])
     : (SUITABLE_PROJECTS[name] || []);
 
+  // Trigger keywords: predefined → frontmatter tags → empty
   const keywords = platform === 'codex'
-    ? (CODEX_TRIGGER_KEYWORDS[name] || [])
-    : (TRIGGER_KEYWORDS[name] || []);
+    ? (CODEX_TRIGGER_KEYWORDS[name] || (fmTags.length ? fmTags : []))
+    : (TRIGGER_KEYWORDS[name] || (fmTags.length ? fmTags : []));
 
   // Determine compatibility
   let compatibility = platform;
