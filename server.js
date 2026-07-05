@@ -306,6 +306,29 @@ function parseTagsField(raw) {
   return [trimmed];
 }
 
+// Last-resort fallback: extract key phrases from English description
+// when no tags exist in frontmatter or predefined mappings
+function extractKeywordsFromDescription(desc) {
+  if (!desc) return [];
+  // Split on sentence boundaries
+  const sentences = desc.split(/[.;]\s*/);
+  const keywords = [];
+  for (const sentence of sentences) {
+    // Extract comma-separated items (e.g. "writing, reviewing, or refactoring")
+    const items = sentence.split(/,\s*/);
+    for (const item of items) {
+      const cleaned = item.replace(/^and\s+|^or\s+|\.$/g, '').trim();
+      // Keep meaningful phrases: 2-6 words, not too long
+      const wordCount = cleaned.split(/\s+/).length;
+      if (wordCount >= 2 && wordCount <= 6 && cleaned.length > 10 && cleaned.length < 80) {
+        keywords.push(cleaned);
+        if (keywords.length >= 5) return keywords;
+      }
+    }
+  }
+  return keywords;
+}
+
 // Guess an emoji for a user-defined category name
 function guessCategoryEmoji(cat) {
   const lower = cat.toLowerCase();
@@ -374,10 +397,16 @@ function getSkillInfo(name, basePath, platform) {
     ? (CODEX_SUITABLE_PROJECTS[name] || [])
     : (SUITABLE_PROJECTS[name] || []);
 
-  // Trigger keywords: predefined → frontmatter tags → empty
-  const keywords = platform === 'codex'
-    ? (CODEX_TRIGGER_KEYWORDS[name] || (fmTags.length ? fmTags : []))
-    : (TRIGGER_KEYWORDS[name] || (fmTags.length ? fmTags : []));
+  // Trigger keywords: predefined → frontmatter tags → description extraction → empty
+  const keywords = (() => {
+    // 1) Predefined mapping
+    const predef = platform === 'codex' ? CODEX_TRIGGER_KEYWORDS[name] : TRIGGER_KEYWORDS[name];
+    if (predef && predef.length) return predef;
+    // 2) Frontmatter tags
+    if (fmTags.length) return fmTags;
+    // 3) Extract from description (last resort)
+    return extractKeywordsFromDescription(fm.description || '');
+  })();
 
   // Determine compatibility
   let compatibility = platform;
