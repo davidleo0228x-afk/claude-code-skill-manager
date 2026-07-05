@@ -9,11 +9,43 @@
 </p>
 
 <p align="center">
-  <a href="#-features">English</a> · <a href="#-功能特性">中文</a>
+  <a href="https://github.com/davidleo0228x-afk/claude-code-skill-manager/releases/latest">
+    <img src="https://img.shields.io/github/v/release/davidleo0228x-afk/claude-code-skill-manager?color=blue&label=Download&style=for-the-badge" alt="Latest Release">
+  </a>
+  <a href="https://github.com/davidleo0228x-afk/claude-code-skill-manager/releases/latest">
+    <img src="https://img.shields.io/badge/🍎-macOS_Native-black?style=for-the-badge&logo=apple" alt="macOS">
+  </a>
+  <a href="https://github.com/davidleo0228x-afk/claude-code-skill-manager/releases/latest">
+    <img src="https://img.shields.io/badge/🪟-Windows-blue?style=for-the-badge&logo=windows" alt="Windows">
+  </a>
+  <a href="https://github.com/davidleo0228x-afk/claude-code-skill-manager/releases/latest">
+    <img src="https://img.shields.io/badge/🐧-Linux-yellow?style=for-the-badge&logo=linux" alt="Linux">
+  </a>
+</p>
+
+<p align="center">
+  <a href="#english">English</a> · <a href="#中文">中文</a>
 </p>
 
 ---
 
+## 📥 Download / 下载
+
+<p align="center">
+  <a href="https://github.com/davidleo0228x-afk/claude-code-skill-manager/releases/latest/download/Skill-Manager.zip">
+    <b>⬇️ 下载 Skill-Manager.zip（2.6 MB）</b>
+  </a>
+</p>
+
+| Platform / 平台 | 方式 | 说明 |
+|---|---|---|
+| 🍎 **macOS** | 解压 → `./install.sh` | 原生 SwiftUI 应用，双击桌面图标打开 |
+| 🪟 **Windows** | 解压 → 双击 `start-skill-manager.vbs` | 浏览器打开 `http://localhost:3099` |
+| 🐧 **Linux** | 解压 → `./install.sh` | 创建 `.desktop` 启动器 |
+
+---
+
+<span id="english"></span>
 ## ✨ Features
 
 - 📋 **Browse all 27 built-in skills** — view names, descriptions, categories, and trigger keywords at a glance
@@ -25,6 +57,7 @@
 - 🖥️ **Native macOS app** — runs as a real desktop application (SwiftUI + WKWebView), not a browser tab
 - 🌐 **Cross-platform** — macOS native app + Windows/Linux browser fallback
 
+<span id="中文"></span>
 ## ✨ 功能特性
 
 - 📋 **浏览全部 27 个内置技能** — 一览技能名称、描述、分类和触发关键词
