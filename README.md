@@ -1,10 +1,18 @@
 # 🛠️ Claude Code Skill Manager
 
 > A beautiful desktop application to manage all your globally installed [Claude Code](https://claude.ai/code) Skills.
+>
+> 一款精美的桌面应用，用于管理你全局安装的所有 [Claude Code](https://claude.ai/code) Skills。
 
 <p align="center">
   <img src="public/icon.png" alt="Skill Manager Icon" width="128" height="128">
 </p>
+
+<p align="center">
+  <a href="#-features">English</a> · <a href="#-功能特性">中文</a>
+</p>
+
+---
 
 ## ✨ Features
 
@@ -17,97 +25,128 @@
 - 🖥️ **Native macOS app** — runs as a real desktop application (SwiftUI + WKWebView), not a browser tab
 - 🌐 **Cross-platform** — macOS native app + Windows/Linux browser fallback
 
-## 📸 Screenshots
+## ✨ 功能特性
 
-> *(Add screenshots here — run the app and take some!)*
+- 📋 **浏览全部 27 个内置技能** — 一览技能名称、描述、分类和触发关键词
+- 🔍 **搜索与筛选** — 按名称或分类快速查找技能
+- 🏷️ **卡片展示触发词** — 无需点开即可看到每个技能的激活方式
+- 🗑️ **删除技能** — 一键移除不需要的技能
+- 🔄 **自动同步** — 外部安装新技能时自动检测并同步
+- 🎨 **暗色主题界面** — 简洁现代的设计，流畅动画效果
+- 🖥️ **原生 macOS 应用** — 真正的桌面应用（SwiftUI + WKWebView），而非浏览器标签页
+- 🌐 **跨平台支持** — macOS 原生应用 + Windows/Linux 浏览器模式
 
-## 🚀 Quick Start
+---
 
-### macOS (Native App)
+## 📸 Screenshots / 截图
+
+> *(Add screenshots here — run the app and take some! / 运行应用后截图放在这里)*
+
+---
+
+## 🚀 Quick Start / 快速开始
+
+### macOS（原生应用）
 
 ```bash
-# Clone the repo
+# 克隆仓库 / Clone the repo
 git clone https://github.com/davidleo0228x-afk/claude-code-skill-manager.git
 cd claude-code-skill-manager
 
-# Install & launch
+# 安装并启动 / Install & launch
 chmod +x install.sh
 ./install.sh
 ```
 
 This compiles the native SwiftUI app and creates a desktop shortcut. Double-click **Skill Manager** on your desktop to open.
+/
+脚本会自动编译原生 SwiftUI 应用并在桌面创建快捷方式，双击 **Skill Manager** 即可打开。
 
 ### Windows / Linux
 
 ```bash
-# Clone & enter
+# 克隆并进入 / Clone & enter
 git clone https://github.com/davidleo0228x-afk/claude-code-skill-manager.git
 cd claude-code-skill-manager
 
-# Install & launch
-chmod +x install.sh   # Linux only
+# Linux: 安装并启动
+chmod +x install.sh
 ./install.sh
+
+# Windows: 双击运行 install.bat
 ```
 
 On Windows and Linux, the app opens in your default browser at `http://localhost:3099`.
+/
+在 Windows 和 Linux 上，应用会在默认浏览器中打开 `http://localhost:3099`。
 
-### Manual Start
+### 手动启动 / Manual Start
 
 ```bash
-# Install dependencies (none required — vanilla Node.js!)
-# Start the server
+# 无需安装依赖 — 纯 Node.js，零依赖！
+# No dependencies required — vanilla Node.js!
+
 node server.js
 
-# Open http://localhost:3099 in your browser
+# 浏览器打开 http://localhost:3099
 ```
 
-## 📁 Project Structure
+---
+
+## 📁 Project Structure / 项目结构
 
 ```
 skill-manager/
-├── server.js              # Node.js HTTP server (zero dependencies)
-├── SkillManager.swift     # Native macOS app (SwiftUI + WKWebView)
+├── server.js              # Node.js HTTP 服务器（零依赖）
+├── SkillManager.swift     # macOS 原生应用（SwiftUI + WKWebView）
 ├── public/
-│   ├── index.html         # Single-page frontend (dark theme)
-│   ├── icon.png           # App icon (1254×1254)
-│   ├── favicon-32.png     # Favicon
+│   ├── index.html         # 单页前端（暗色主题）
+│   ├── icon.png           # 应用图标 (1254×1254)
+│   ├── favicon-32.png     # 网页图标
 │   └── apple-touch-icon.png
-└── install.sh             # Cross-platform installer
+├── install.sh             # 跨平台安装脚本
+└── .gitignore
 ```
 
-## 🔧 How It Works
+---
 
-1. **Server** (`server.js`) — A zero-dependency Node.js HTTP server that:
-   - Parses `SKILL.md` files from `~/.agents/skills/` (YAML frontmatter)
-   - Reads skill metadata from `~/.claude/skills/` symlinks
-   - Exposes REST API: `GET /api/skills`, `GET /api/skills/:name`, `DELETE /api/skills/:name`
-   - Serves static files from `public/`
+## 🔧 How It Works / 工作原理
 
-2. **Frontend** (`public/index.html`) — A single-page app featuring:
-   - CSS Grid card layout with hover animations
-   - Real-time search and category filtering
-   - Detail modal with full skill information
-   - Auto-refresh with change detection (30s interval)
-   - Sync progress bar and shimmer animations
-   - Click ripple effects on cards
+1. **Server / 后端** (`server.js`) — 零依赖 Node.js HTTP 服务器：
+   - 解析 `~/.agents/skills/` 下的 `SKILL.md` 文件（YAML 前置元数据）
+   - 读取 `~/.claude/skills/` 符号链接中的技能元数据
+   - 提供 REST API：`GET /api/skills`、`GET /api/skills/:name`、`DELETE /api/skills/:name`
+   - 托管 `public/` 静态文件
 
-3. **Native App** (`SkillManager.swift`) — SwiftUI wrapper that:
-   - Embeds the web UI in a `WKWebView`
-   - Auto-starts the Node.js server on launch
-   - Runs as a proper macOS application (Dock icon, ⌘Tab, etc.)
-   - Supports both Apple Silicon and Intel Macs (universal binary)
+2. **Frontend / 前端** (`public/index.html`) — 单页应用，包含：
+   - CSS Grid 卡片布局 + 悬停动画
+   - 实时搜索与分类筛选
+   - 详情弹窗展示完整技能信息
+   - 30 秒间隔自动检测更新
+   - 同步进度条与闪光动画
+   - 卡片点击涟漪动效
 
-## 🏗️ Build From Source
+3. **Native App / 原生应用** (`SkillManager.swift`) — SwiftUI 封装：
+   - 在 `WKWebView` 中嵌入 Web 界面
+   - 启动时自动运行 Node.js 服务器
+   - 作为真正的 macOS 应用运行（Dock 图标、⌘Tab 切换等）
+   - 同时支持 Apple Silicon 和 Intel Mac（通用二进制）
 
-### Prerequisites
+---
+
+## 🏗️ Build From Source / 从源码构建
+
+### Prerequisites / 环境要求
 
 - [Node.js](https://nodejs.org/) (v16+)
-- **macOS only:** Xcode Command Line Tools (`xcode-select --install`)
+- **仅 macOS：** Xcode Command Line Tools (`xcode-select --install`)
 
-### Build the Native macOS App
+### Build the Native macOS App / 编译原生 macOS 应用
 
 ```bash
-# Compile universal binary (arm64 + x86_64)
+# 编译通用二进制（arm64 + x86_64）
+# Compile universal binary
+
 swiftc -parse-as-library \
   -target arm64-apple-macos13.0 \
   -o SkillManager_arm64 \
@@ -121,30 +160,36 @@ swiftc -parse-as-library \
 lipo -create SkillManager_arm64 SkillManager_x86_64 \
   -output "Skill Manager.app/Contents/MacOS/Skill Manager"
 
-# Clean up intermediates
+# 清理中间文件 / Clean up
 rm SkillManager_arm64 SkillManager_x86_64
 ```
 
-## 📦 Tech Stack
+---
 
-| Layer | Technology |
-|-------|-----------|
-| Backend | Node.js (vanilla, zero dependencies) |
-| Frontend | HTML5, CSS3, Vanilla JavaScript |
-| Native App (macOS) | SwiftUI, WKWebView, AppKit |
-| Package | Universal Mach-O binary (arm64 + x86_64) |
-| Icons | `iconutil` + `sips` → `.icns` |
+## 📦 Tech Stack / 技术栈
 
-## 🤝 Contributing
+| Layer / 层级 | Technology / 技术 |
+|-------------|-------------------|
+| Backend / 后端 | Node.js（原生，零依赖） |
+| Frontend / 前端 | HTML5、CSS3、Vanilla JavaScript |
+| Native App / 原生应用 (macOS) | SwiftUI、WKWebView、AppKit |
+| Package / 打包 | Universal Mach-O 通用二进制（arm64 + x86_64） |
+| Icons / 图标 | `iconutil` + `sips` → `.icns` |
+
+---
+
+## 🤝 Contributing / 参与贡献
 
 Contributions are welcome! Feel free to open issues or submit PRs.
+/
+欢迎贡献！欢迎提交 Issue 或 PR。
 
-## 📄 License
+## 📄 License / 许可证
 
 MIT © [davidleo0228x-afk](https://github.com/davidleo0228x-afk)
 
 ---
 
 <p align="center">
-  <sub>Built with ❤️ for the Claude Code community</sub>
+  <sub>Built with ❤️ for the Claude Code community · 为 Claude Code 社区用 ❤️ 构建</sub>
 </p>
