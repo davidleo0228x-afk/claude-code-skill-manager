@@ -28,11 +28,33 @@ function saveTranslationCache(cache) {
 }
 
 // Free MyMemory API — no key required, ~5000 chars/day anonymous limit
+// Query limit: 500 chars. Truncate intelligently at sentence boundary.
 async function translateToChinese(text) {
   if (!text || text.length < 10) return null;
+
+  // Truncate to 500 chars at the nearest sentence boundary
+  const MAX_LEN = 500;
+  let payload = text;
+  if (payload.length > MAX_LEN) {
+    payload = payload.substring(0, MAX_LEN);
+    // Walk back to the last sentence-ending punctuation
+    const lastPeriod = Math.max(
+      payload.lastIndexOf('. '),
+      payload.lastIndexOf('? '),
+      payload.lastIndexOf('! ')
+    );
+    if (lastPeriod > MAX_LEN * 0.6) {
+      payload = payload.substring(0, lastPeriod + 1);
+    } else {
+      // Fall back to last space
+      const lastSpace = payload.lastIndexOf(' ');
+      if (lastSpace > MAX_LEN * 0.6) payload = payload.substring(0, lastSpace);
+    }
+  }
+
   try {
     const url = 'https://api.mymemory.translated.net/get?q=' +
-      encodeURIComponent(text) + '&langpair=en|zh-CN';
+      encodeURIComponent(payload) + '&langpair=en|zh-CN';
     const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!resp.ok) return null;
     const data = await resp.json();
@@ -626,7 +648,7 @@ const server = http.createServer(async (req, res) => {
 
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (method === 'OPTIONS') {
@@ -671,6 +693,43 @@ const server = http.createServer(async (req, res) => {
     }
 
     return sendJSON(res, info);
+  }
+
+  // API: Translate all untranslated skills
+  if (method === 'POST' && url.pathname === '/api/translate-all') {
+    const cache = loadTranslationCache();
+    const skills = getAllSkills();
+    let translated = 0, failed = 0, skipped = 0;
+
+    for (const skill of skills) {
+      if (skill.hasChineseDesc) { skipped++; continue; }
+      if (cache[skill.dirName]) {
+        // Cached translation exists but hasn't been applied yet — apply it
+        skipped++;
+        continue;
+      }
+      if (!skill.descriptionEn || skill.descriptionEn.length < 10) { skipped++; continue; }
+
+      const result = await translateToChinese(skill.descriptionEn);
+      if (result) {
+        cache[skill.dirName] = result;
+        saveTranslationCache(cache);
+        translated++;
+      } else {
+        failed++;
+      }
+      // Rate limit: 500ms between API calls
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    return sendJSON(res, {
+      success: true,
+      translated,
+      failed,
+      skipped,
+      total: skills.length,
+      message: `翻译完成：${translated} 个新翻译，${failed} 个失败，${skipped} 个跳过`,
+    });
   }
 
   // API: Delete skill — handles both Claude Code and Codex
