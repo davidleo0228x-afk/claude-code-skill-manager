@@ -8,17 +8,30 @@ All notable changes to Claude Code Skill Manager are documented here.
 
 ## [v1.0.0] — 2026-07-05
 
-### 🌐 Auto-Translation / 自动翻译 — 2026-07-06
+### 🚀 Startup Translation Check / 启动翻译检查 — 2026-07-06
 
-English skill descriptions are now automatically translated to Chinese when no predefined translation exists.
+On server startup, automatically scans all skills and translates any missing Chinese descriptions in the background. No more waiting for the first detail view — all skills are pre-translated before any user interaction.
 /
-当没有预定义中文描述时，英文技能说明会自动翻译为中文。
+服务器启动时自动扫描所有技能，后台批量翻译缺失的中文描述。无需等待首次点击详情页——所有技能在用户交互前就已翻译完成。
 
-- **MyMemory API** — free, no API key required, neural translation model
-- **File-based cache** — translations persist across server restarts
-- **On-demand trigger** — translates on first detail view, cached thereafter
-- **Zero dependencies** — uses Node.js built-in `fetch`
-- **Graceful fallback** — shows English original if translation fails
+- **Batch translation at boot** — iterates all skills, translates untranslated ones
+- **Incremental cache persistence** — saves after each successful translation
+- **Rate limiting** — 500ms delay between API calls
+- **Auto-retry** — failed translations retry on next restart
+- **Non-blocking** — server is immediately ready, translation runs in background
+
+---
+
+### 🏷️ Smart Category Matching / 智能分类匹配 — 2026-07-06
+
+Unknown skills are now intelligently categorized based on name + description keyword analysis, instead of all landing in "📦 其他". The 5 previously uncategorized skills are now properly placed:
+/
+未知技能现在根据名称+描述关键词智能匹配现有分类，不再全部归入"📦 其他"。5 个之前未分类的技能现已正确归位：
+
+- `guessCategory(name, description)` — keyword-based matching against 8 existing categories
+- **5 skills reclassified**: 4→🎨 设计 / UI, 1→🔧 工具 / 写作
+- **Word-boundary fix** — fixed `ui`/`ai` substring false positives (e.g. "guidelines" no longer matches UI)
+- **📦 其他 count: 0** — no skills left unclassified
 
 ---
 

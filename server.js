@@ -43,6 +43,38 @@ async function translateToChinese(text) {
   return null;
 }
 
+// ─── Startup Translation Check ─────────────────────────────────────────────
+
+async function startupTranslationCheck() {
+  const cache = loadTranslationCache();
+  const skills = getAllSkills();
+  let translated = 0, failed = 0, skipped = 0;
+
+  for (const skill of skills) {
+    if (skill.hasChineseDesc) { skipped++; continue; }
+    if (cache[skill.dirName]) { skipped++; continue; }
+    if (!skill.descriptionEn || skill.descriptionEn.length < 10) { skipped++; continue; }
+
+    console.log(`🌐 Translating (${translated + failed + 1}/${skills.length}): ${skill.name}...`);
+    const result = await translateToChinese(skill.descriptionEn);
+    if (result) {
+      cache[skill.dirName] = result;
+      saveTranslationCache(cache);
+      translated++;
+      console.log(`  ✅ ${skill.name}`);
+    } else {
+      failed++;
+      console.log(`  ⚠️  Failed: ${skill.name}`);
+    }
+    // Rate limit: 500ms between API calls
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  if (translated > 0 || failed > 0) {
+    console.log(`🎉 Startup translation: ${translated} new, ${failed} failed, ${skipped} skipped`);
+  }
+}
+
 // ─── Category & Metadata Mappings ───────────────────────────────────────────
 
 const CATEGORIES = {
@@ -363,10 +395,34 @@ function extractKeywordsFromDescription(desc) {
   return keywords;
 }
 
+// Guess category from skill name + description when no predefined mapping exists
+function guessCategory(name, description) {
+  const text = (name + ' ' + (description || '')).toLowerCase();
+
+  if (/design|\b(ui|ux)\b|website|landing|layout|visual|style.guide|interface|wireframe|设计/.test(text))
+    return { cat: '🎨 设计 / UI', emoji: '🎨' };
+  if (/animation|motion|scroll|transition|parallax|动效|动画/.test(text))
+    return { cat: '✨ 动效 / 动画', emoji: '✨' };
+  if (/ppt|slide|presentation|deck|演示|幻灯片/.test(text))
+    return { cat: '📊 PPT / 演示', emoji: '📊' };
+  if (/react|next\.?js|frontend|前端/.test(text))
+    return { cat: '⚛️ React 前端', emoji: '⚛️' };
+  if (/deploy|vercel|ci\/cd|部署|运维/.test(text))
+    return { cat: '🚀 部署 / 运维', emoji: '🚀' };
+  if (/writing|guideline|review|refactor|写作|文档/.test(text))
+    return { cat: '🔧 工具 / 写作', emoji: '🔧' };
+  if (/\b(ai|llm|gpt|model)\b|模型/.test(text))
+    return { cat: '🤖 AI / LLM', emoji: '🤖' };
+  if (/system|plugin|插件/.test(text))
+    return { cat: '⚙️ 系统 / 插件', emoji: '⚙️' };
+
+  return null;
+}
+
 // Guess an emoji for a user-defined category name
 function guessCategoryEmoji(cat) {
   const lower = cat.toLowerCase();
-  if (/design|ui|设计|样式|视觉/.test(lower)) return '🎨';
+  if (/design|\bui\b|设计|样式|视觉/.test(lower)) return '🎨';
   if (/animation|motion|动画|动效|scroll/.test(lower)) return '✨';
   if (/ppt|slide|演示|present/.test(lower)) return '📊';
   if (/react|frontend|前端|next/.test(lower)) return '⚛️';
@@ -419,6 +475,7 @@ function getSkillInfo(name, basePath, platform, cache = {}) {
   if (!meta && fmCategory) {
     meta = { cat: fmCategory, emoji: guessCategoryEmoji(fmCategory) };
   }
+  if (!meta) meta = guessCategory(name, fm.description);
   if (!meta) meta = { cat: '📦 其他', emoji: '📦' };
 
   // Description: predefined → cached translation → frontmatter description → empty
@@ -659,6 +716,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`🧩 Skill Manager running at http://localhost:${PORT}`);
+  startupTranslationCheck();
 });
 
 // Graceful shutdown
