@@ -36,3 +36,6 @@ Packages/
 *.app
 *.zip
 .DS_Store
+
+# Translation cache
+.translation-cache.json

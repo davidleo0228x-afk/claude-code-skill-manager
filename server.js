@@ -8,6 +8,40 @@ const CLAUDE_DIR = path.join(os.homedir(), '.claude', 'skills');
 const CODEX_SKILLS_DIR = path.join(os.homedir(), '.codex', 'skills');
 const CODEX_SYSTEM_DIR = path.join(CODEX_SKILLS_DIR, '.system');
 const PORT = 3099;
+const TRANSLATION_CACHE_PATH = path.join(__dirname, '.translation-cache.json');
+
+// ─── Translation Helpers ──────────────────────────────────────────────────────
+
+function loadTranslationCache() {
+  try {
+    if (fs.existsSync(TRANSLATION_CACHE_PATH)) {
+      return JSON.parse(fs.readFileSync(TRANSLATION_CACHE_PATH, 'utf-8'));
+    }
+  } catch {}
+  return {};
+}
+
+function saveTranslationCache(cache) {
+  try {
+    fs.writeFileSync(TRANSLATION_CACHE_PATH, JSON.stringify(cache, null, 2));
+  } catch {}
+}
+
+// Free MyMemory API — no key required, ~5000 chars/day anonymous limit
+async function translateToChinese(text) {
+  if (!text || text.length < 10) return null;
+  try {
+    const url = 'https://api.mymemory.translated.net/get?q=' +
+      encodeURIComponent(text) + '&langpair=en|zh-CN';
+    const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (data.responseStatus === 200 && data.responseData?.translatedText) {
+      return data.responseData.translatedText;
+    }
+  } catch {}
+  return null;
+}
 
 // ─── Category & Metadata Mappings ───────────────────────────────────────────
 
@@ -348,7 +382,7 @@ function guessCategoryEmoji(cat) {
   return '📦';
 }
 
-function getSkillInfo(name, basePath, platform) {
+function getSkillInfo(name, basePath, platform, cache = {}) {
   const skillPath = path.join(basePath, name);
   const mdPath = path.join(skillPath, 'SKILL.md');
   const symlinkPath = platform === 'claude-code' ? path.join(CLAUDE_DIR, name) : null;
@@ -387,10 +421,13 @@ function getSkillInfo(name, basePath, platform) {
   }
   if (!meta) meta = { cat: '📦 其他', emoji: '📦' };
 
-  // Description: predefined → frontmatter description → empty
+  // Description: predefined → cached translation → frontmatter description → empty
+  const hasChineseDesc = !!(platform === 'codex'
+    ? CODEX_ZH_DESCRIPTIONS[name]
+    : ZH_DESCRIPTIONS[name]);
   const desc = platform === 'codex'
-    ? (CODEX_ZH_DESCRIPTIONS[name] || fm.description || '')
-    : (ZH_DESCRIPTIONS[name] || fm.description || '');
+    ? (CODEX_ZH_DESCRIPTIONS[name] || cache[name] || fm.description || '')
+    : (ZH_DESCRIPTIONS[name] || cache[name] || fm.description || '');
 
   // Suitable projects: predefined only (no standard frontmatter field for this)
   const projects = platform === 'codex'
@@ -437,11 +474,13 @@ function getSkillInfo(name, basePath, platform) {
     compatibility,
     version: fm.version || '',
     source: fm.license ? (fm.license.includes('Proprietary') ? 'Anthropic' : 'Community') : 'Community',
+    hasChineseDesc,
   };
 }
 
 function getAllSkills() {
   const skills = [];
+  const cache = loadTranslationCache();
 
   // ── Claude Code skills ────────────────────────────────
   if (fs.existsSync(AGENTS_DIR)) {
@@ -449,7 +488,7 @@ function getAllSkills() {
       .filter(d => d.isDirectory())
       .map(d => d.name);
     for (const name of dirs) {
-      const info = getSkillInfo(name, AGENTS_DIR, 'claude-code');
+      const info = getSkillInfo(name, AGENTS_DIR, 'claude-code', cache);
       if (info) skills.push(info);
     }
   }
@@ -460,7 +499,7 @@ function getAllSkills() {
       .filter(d => d.isDirectory() && d.name !== '.system')
       .map(d => d.name);
     for (const name of dirs) {
-      const info = getSkillInfo(name, CODEX_SKILLS_DIR, 'codex');
+      const info = getSkillInfo(name, CODEX_SKILLS_DIR, 'codex', cache);
       if (info) skills.push(info);
     }
 
@@ -470,7 +509,7 @@ function getAllSkills() {
         .filter(d => d.isDirectory())
         .map(d => d.name);
       for (const name of sysDirs) {
-        const info = getSkillInfo(name, CODEX_SYSTEM_DIR, 'codex');
+        const info = getSkillInfo(name, CODEX_SYSTEM_DIR, 'codex', cache);
         if (info) {
           info.isSystem = true;
           info.installType = '⚙️ 系统内置';
@@ -524,7 +563,7 @@ function sendJSON(res, data, code = 200) {
   res.end(JSON.stringify(data, null, 2));
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const method = req.method;
 
@@ -556,12 +595,24 @@ const server = http.createServer((req, res) => {
   if (method === 'GET' && url.pathname.startsWith('/api/skills/')) {
     const name = decodeURIComponent(url.pathname.replace('/api/skills/', ''));
     // Try Claude Code first, then Codex, then Codex system
-    let info = getSkillInfo(name, AGENTS_DIR, 'claude-code')
-            || getSkillInfo(name, CODEX_SKILLS_DIR, 'codex')
-            || getSkillInfo(name, CODEX_SYSTEM_DIR, 'codex');
+    const cache = loadTranslationCache();
+    let info = getSkillInfo(name, AGENTS_DIR, 'claude-code', cache)
+            || getSkillInfo(name, CODEX_SKILLS_DIR, 'codex', cache)
+            || getSkillInfo(name, CODEX_SYSTEM_DIR, 'codex', cache);
     if (!info) return sendJSON(res, { error: 'Skill not found' }, 404);
     // Mark system skills
     if (!info.isSystem && fs.existsSync(path.join(CODEX_SYSTEM_DIR, name))) info.isSystem = true;
+
+    // ── Auto-translate: if no predefined Chinese description, translate on demand ──
+    if (!info.hasChineseDesc && info.descriptionEn && !cache[name]) {
+      const translated = await translateToChinese(info.descriptionEn);
+      if (translated) {
+        info.description = translated;
+        cache[name] = translated;
+        saveTranslationCache(cache);
+      }
+    }
+
     return sendJSON(res, info);
   }
 
