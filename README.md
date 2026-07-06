@@ -60,6 +60,7 @@
 - 🔍 **Search & filter** — by name, category, or platform (Claude / Codex)
 - 🗑️ **Delete skills** — remove unwanted skills with one click (both platforms)
 - 🔄 **Auto-sync** — automatically detects new skills installed externally (30s polling)
+- 🌐 **Auto-translation** — English descriptions automatically translate to Chinese for unknown skills (MyMemory API, cached)
 - ✨ **GSAP scroll animations** — cards fade in as you scroll, scroll progress bar, header shadow
 - 🎨 **Dark theme UI** — clean, modern interface with ripple effects and hover animations
 - 🖥️ **Native macOS app** — runs as a real desktop application (SwiftUI + WKWebView), not a browser tab
@@ -75,6 +76,7 @@
 - 🔍 **搜索与筛选** — 按名称、分类或平台（Claude / Codex）快速筛选
 - 🗑️ **删除技能** — 一键移除不需要的技能（支持双平台）
 - 🔄 **自动同步** — 外部安装新技能时自动检测并同步（30 秒轮询）
+- 🌐 **自动翻译** — 未知技能英文说明自动翻译为中文（MyMemory API，缓存持久化）
 - ✨ **GSAP 滚动动画** — 卡片随滚动淡入、页面滚动进度条、Header 阴影随滚动浮现
 - 🎨 **暗色主题界面** — 简洁现代的设计，涟漪点击动效、悬停动画
 - 🖥️ **原生 macOS 应用** — 真正的桌面应用（SwiftUI + WKWebView），而非浏览器标签页

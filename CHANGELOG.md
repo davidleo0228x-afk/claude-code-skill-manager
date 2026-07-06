@@ -8,6 +8,20 @@ All notable changes to Claude Code Skill Manager are documented here.
 
 ## [v1.0.0] — 2026-07-05
 
+### 🌐 Auto-Translation / 自动翻译 — 2026-07-06
+
+English skill descriptions are now automatically translated to Chinese when no predefined translation exists.
+/
+当没有预定义中文描述时，英文技能说明会自动翻译为中文。
+
+- **MyMemory API** — free, no API key required, neural translation model
+- **File-based cache** — translations persist across server restarts
+- **On-demand trigger** — translates on first detail view, cached thereafter
+- **Zero dependencies** — uses Node.js built-in `fetch`
+- **Graceful fallback** — shows English original if translation fails
+
+---
+
 ### 🎉 Initial Release / 首次发布
 
 First public release of the Skill Manager desktop application.
